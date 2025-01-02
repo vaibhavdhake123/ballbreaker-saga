@@ -1,118 +1,289 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
+  Canvas,
+  Circle,
+  LinearGradient,
+  matchFont,
+  Rect,
+  RoundedRect,
+  Shader,
   Text,
-  useColorScheme,
-  View,
-} from 'react-native';
-
+  useClock,
+  vec,
+} from "@shopify/react-native-skia";
+import React from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import {
+  useDerivedValue,
+  useFrameCallback,
+  useSharedValue,
+} from "react-native-reanimated";
+import {
+  BRICK_HEIGHT,
+  BRICK_MIDDLE,
+  BRICK_ROW_LENGTH,
+  BRICK_WIDTH,
+  height,
+  BALL_COLOR,
+  PADDLE_HEIGHT,
+  PADDLE_MIDDLE,
+  PADDLE_WIDTH,
+  TOTAL_BRICKS,
+  width,
+  RADIUS,
+} from "./src/constant/constants";
+import { animate, createBouncingExample } from "./src/constant/sample";
+import { BrickInterface, CircleInterface, PaddleInterface } from "./src/constant/types";
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+import { shader } from "./src/constant/shader";
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
+interface Props {
+  idx: number;
+  brick: BrickInterface;
 }
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+const fontFamily = Platform.select({ ios: "Helvetica", default: "serif" });
+const fontStyle = {
+  fontFamily,
+  fontSize: 55,
+  fontWeight: "bold",
+};
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+// @ts-ignore
+const font = matchFont(fontStyle);
+
+const resolution = vec(width, height);
+
+const Brick = ({ idx, brick }: Props) => {
+  const color = useDerivedValue(() => {
+    return brick.canCollide.value ? "orange" : "transparent";
+  }, [brick.canCollide]);
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <RoundedRect
+      key={idx}
+      x={brick.x}
+      y={brick.y}
+      width={brick.width}
+      height={brick.height}
+      color={color}
+      r={8}
+    >
+      <LinearGradient
+        start={vec(5, 300)}
+        end={vec(4, 50)}
+        colors={["red", "orange"]}
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+    </RoundedRect>
+  );
+};
+
+export default function App() {
+  const brickCount = useSharedValue(0);
+  const clock = useClock();
+
+  const circleObject: CircleInterface = {
+    type: "Circle",
+    id: 0,
+    x: useSharedValue(0),
+    y: useSharedValue(0),
+    r: RADIUS,
+    m: 0,
+    ax: 0,
+    ay: 0,
+    vx: 0,
+    vy: 0,
+  };
+
+  const rectangleObject: PaddleInterface = {
+    type: "Paddle",
+    id: 0,
+    x: useSharedValue(PADDLE_MIDDLE),
+    y: useSharedValue(height - 100),
+    m: 0,
+    ax: 0,
+    ay: 0,
+    vx: 0,
+    vy: 0,
+    height: PADDLE_HEIGHT,
+    width: PADDLE_WIDTH,
+  };
+
+  const bricks: BrickInterface[] = Array(TOTAL_BRICKS)
+    .fill(0)
+    .map((_, idx) => {
+      const farBrickX = BRICK_MIDDLE + BRICK_WIDTH + 50;
+      const middleBrickX = BRICK_MIDDLE;
+      const closeBrickX = BRICK_MIDDLE - BRICK_WIDTH - 50;
+      const startingY = 60;
+      const ySpacing = 45;
+
+      let startingXPosition = -1;
+
+      if (idx % BRICK_ROW_LENGTH === 0) {
+        startingXPosition = farBrickX;
+      } else if (idx % BRICK_ROW_LENGTH === 1) {
+        startingXPosition = middleBrickX;
+      } else if (idx % BRICK_ROW_LENGTH === 2) {
+        startingXPosition = closeBrickX;
+      }
+
+      const startingYPosition =
+        startingY + ySpacing * Math.floor(idx / BRICK_ROW_LENGTH);
+
+      return {
+        type: "Brick",
+        id: 0,
+        x: useSharedValue(startingXPosition),
+        y: useSharedValue(startingYPosition),
+        m: 0,
+        ax: 0,
+        ay: 0,
+        vx: 0,
+        vy: 0,
+        height: BRICK_HEIGHT,
+        width: BRICK_WIDTH,
+        canCollide: useSharedValue(true),
+      };
+    });
+
+  const resetGame = () => {
+    "worklet";
+
+    rectangleObject.x.value = PADDLE_MIDDLE;
+
+    createBouncingExample(circleObject);
+    for (const brick of bricks) {
+      brick.canCollide.value = true;
+    }
+
+    brickCount.value = 0;
+  };
+
+  createBouncingExample(circleObject);
+
+  useFrameCallback((frameInfo) => {
+    if (!frameInfo.timeSincePreviousFrame) {
+      return;
+    }
+
+    if (brickCount.value === TOTAL_BRICKS || brickCount.value === -1) {
+      circleObject.ax = 0.5;
+      circleObject.ay = 1;
+      circleObject.vx = 0;
+      circleObject.vy = 0;
+      return;
+    }
+
+    animate(
+      [circleObject, rectangleObject, ...bricks],
+      frameInfo.timeSincePreviousFrame,
+      brickCount
+    );
+  });
+
+  const gesture = Gesture.Pan()
+    .onBegin(() => {
+      if (brickCount.value === TOTAL_BRICKS || brickCount.value === -1) {
+        resetGame();
+      }
+    })
+    .onChange(({ x }) => {
+      rectangleObject.x.value = x - PADDLE_WIDTH / 2;
+    });
+
+  const opacity = useDerivedValue(() => {
+    return brickCount.value === TOTAL_BRICKS || brickCount.value === -1 ? 1 : 0;
+  }, [brickCount]);
+
+  const textPosition = useDerivedValue(() => {
+    const endText = brickCount.value === TOTAL_BRICKS ? "YOU WIN" : "YOU LOSE";
+    return (width - font.measureText(endText).width) / 2;
+  }, [font]);
+
+  const gameEndingText = useDerivedValue(() => {
+    return brickCount.value === TOTAL_BRICKS ? "YOU WIN" : "YOU LOSE";
+  }, []);
+
+  const uniforms = useDerivedValue(() => {
+    return {
+      iResolution: resolution,
+      iTime: clock.value * 0.0005,
+    };
+  }, [clock, width, height]);
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureDetector gesture={gesture}>
+        <View style={styles.container}>
+          <Canvas style={{ flex: 1 }}>
+            <Rect x={0} y={0} height={height} width={width}>
+              <Shader source={shader} uniforms={uniforms} />
+            </Rect>
+            <Circle
+              cx={circleObject.x}
+              cy={circleObject.y}
+              r={RADIUS}
+              color={BALL_COLOR}
+            />
+            <RoundedRect
+              x={rectangleObject.x}
+              y={rectangleObject.y}
+              width={rectangleObject.width}
+              height={rectangleObject.height}
+              color={"white"}
+              r={8}
+            />
+            {bricks.map((brick, idx) => {
+              return <Brick key={idx} idx={idx} brick={brick} />;
+            })}
+            <Rect
+              x={0}
+              y={0}
+              height={height}
+              width={width}
+              color={"red"}
+              opacity={opacity}
+            >
+              <LinearGradient
+                start={vec(0, 200)}
+                end={vec(0, 500)}
+                colors={["#4070D3", "#EA2F86"]}
+              />
+            </Rect>
+            <Text
+              x={textPosition}
+              y={height / 2}
+              text={gameEndingText}
+              font={font}
+              opacity={opacity}
+            />
+          </Canvas>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
+    backgroundColor: "black",
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  titleContainer: {
+    flexDirection: "row",
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
+  titleTextNormal: {
+    color: "white",
+    fontSize: 40,
   },
-  highlight: {
-    fontWeight: '700',
+  titleTextBold: {
+    color: "white",
+    fontSize: 40,
+    fontWeight: "bold",
   },
 });
-
-export default App;

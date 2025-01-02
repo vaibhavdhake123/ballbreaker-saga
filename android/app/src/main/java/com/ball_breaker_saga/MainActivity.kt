@@ -1,4 +1,4 @@
-package com.ball_breaker_saga
+package com.pawsomecreations.ball_breaker_saga
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
